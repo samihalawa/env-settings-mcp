@@ -2,13 +2,11 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ErrorCode, ListToolsRequestSchema, McpError, } from '@modelcontextprotocol/sdk/types.js';
-import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 class EnvSettingsMCPServer {
     server;
     settingsPath;
-    encryptionKey;
     constructor() {
         this.server = new Server({
             name: 'env-settings-mcp',
@@ -21,55 +19,20 @@ class EnvSettingsMCPServer {
         // Use Smithery profile or local storage
         const profilePath = process.env.SMITHERY_PROFILE_PATH || process.env.HOME + '/.smithery';
         this.settingsPath = path.join(profilePath, 'env-settings.json');
-        this.encryptionKey = process.env.ENV_ENCRYPTION_KEY || 'default-key-change-me';
         this.setupToolHandlers();
-    }
-    encrypt(text) {
-        const cipher = crypto.createCipher('aes-256-cbc', this.encryptionKey);
-        let encrypted = cipher.update(text, 'utf8', 'hex');
-        encrypted += cipher.final('hex');
-        return encrypted;
-    }
-    decrypt(encryptedText) {
-        const decipher = crypto.createDecipher('aes-256-cbc', this.encryptionKey);
-        let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-        decrypted += decipher.final('utf8');
-        return decrypted;
     }
     async loadSettings() {
         try {
             const data = await fs.readFile(this.settingsPath, 'utf8');
-            const encrypted = JSON.parse(data);
-            const decrypted = {};
-            for (const [key, value] of Object.entries(encrypted)) {
-                if (typeof value === 'string') {
-                    decrypted[key] = this.decrypt(value);
-                }
-                else {
-                    decrypted[key] = value;
-                }
-            }
-            return decrypted;
+            return JSON.parse(data);
         }
         catch (error) {
             return {};
         }
     }
     async saveSettings(settings) {
-        const encrypted = {};
-        for (const [key, value] of Object.entries(settings)) {
-            if (typeof value === 'string' && key.toLowerCase().includes('key') ||
-                key.toLowerCase().includes('secret') ||
-                key.toLowerCase().includes('password') ||
-                key.toLowerCase().includes('token')) {
-                encrypted[key] = this.encrypt(value);
-            }
-            else {
-                encrypted[key] = value;
-            }
-        }
         await fs.mkdir(path.dirname(this.settingsPath), { recursive: true });
-        await fs.writeFile(this.settingsPath, JSON.stringify(encrypted, null, 2));
+        await fs.writeFile(this.settingsPath, JSON.stringify(settings, null, 2));
     }
     setupToolHandlers() {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -77,7 +40,7 @@ class EnvSettingsMCPServer {
                 tools: [
                     {
                         name: 'set_env',
-                        description: 'Set environment variable or setting (automatically encrypts sensitive values)',
+                        description: 'Set environment variable or setting',
                         inputSchema: {
                             type: 'object',
                             properties: {
@@ -113,15 +76,10 @@ class EnvSettingsMCPServer {
                     },
                     {
                         name: 'list_env',
-                        description: 'List all environment variables and settings (values hidden for security)',
+                        description: 'List all environment variables and settings',
                         inputSchema: {
                             type: 'object',
                             properties: {
-                                showValues: {
-                                    type: 'boolean',
-                                    description: 'Show actual values (use with caution)',
-                                    default: false,
-                                },
                                 filter: {
                                     type: 'string',
                                     description: 'Filter keys by pattern',
@@ -158,11 +116,6 @@ class EnvSettingsMCPServer {
                                 filter: {
                                     type: 'string',
                                     description: 'Filter keys by pattern',
-                                },
-                                maskSecrets: {
-                                    type: 'boolean',
-                                    description: 'Mask sensitive values in export',
-                                    default: true,
                                 },
                             },
                         },
@@ -252,18 +205,11 @@ class EnvSettingsMCPServer {
             const regex = new RegExp(args.filter, 'i');
             keys = keys.filter(key => regex.test(key));
         }
-        const result = keys.map(key => {
-            const value = settings[key];
-            const isSecret = key.toLowerCase().includes('key') ||
-                key.toLowerCase().includes('secret') ||
-                key.toLowerCase().includes('password') ||
-                key.toLowerCase().includes('token');
-            return {
-                key,
-                value: args.showValues ? value : (isSecret ? '***HIDDEN***' : value),
-                type: isSecret ? 'secret' : 'regular',
-            };
-        });
+        const result = keys.map(key => ({
+            key,
+            value: settings[key],
+            type: 'regular',
+        }));
         return {
             content: [
                 {
@@ -302,35 +248,20 @@ class EnvSettingsMCPServer {
             case 'dotenv':
                 for (const key of keys) {
                     const value = settings[key];
-                    const isSecret = key.toLowerCase().includes('key') ||
-                        key.toLowerCase().includes('secret') ||
-                        key.toLowerCase().includes('password') ||
-                        key.toLowerCase().includes('token');
-                    const exportValue = (args.maskSecrets && isSecret) ? '***MASKED***' : value;
-                    output += `${key}=${exportValue}\n`;
+                    output += `${key}=${value}\n`;
                 }
                 break;
             case 'json':
                 const jsonObj = {};
                 for (const key of keys) {
-                    const value = settings[key];
-                    const isSecret = key.toLowerCase().includes('key') ||
-                        key.toLowerCase().includes('secret') ||
-                        key.toLowerCase().includes('password') ||
-                        key.toLowerCase().includes('token');
-                    jsonObj[key] = (args.maskSecrets && isSecret) ? '***MASKED***' : value;
+                    jsonObj[key] = settings[key];
                 }
                 output = JSON.stringify(jsonObj, null, 2);
                 break;
             case 'shell':
                 for (const key of keys) {
                     const value = settings[key];
-                    const isSecret = key.toLowerCase().includes('key') ||
-                        key.toLowerCase().includes('secret') ||
-                        key.toLowerCase().includes('password') ||
-                        key.toLowerCase().includes('token');
-                    const exportValue = (args.maskSecrets && isSecret) ? '***MASKED***' : value;
-                    output += `export ${key}="${exportValue}"\n`;
+                    output += `export ${key}="${value}"\n`;
                 }
                 break;
         }
