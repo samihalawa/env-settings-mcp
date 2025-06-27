@@ -1,0 +1,31 @@
+{
+  "name": "@samihalawa/env-settings-mcp",
+  "version": "1.0.0",
+  "description": "MCP Server for secure environment variable and settings management via Smithery.ai hosting",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "environment",
+    "settings",
+    "secrets",
+    "config",
+    "smithery"
+  ],
+  "author": "Sami Halawa",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.22.0",
+    "crypto": "^1.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

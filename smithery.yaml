@@ -1,0 +1,40 @@
+version: 1
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      encryptionKey:
+        type: string
+        description: "Encryption key for securing sensitive values (leave empty for default)"
+        default: ""
+      storagePath:
+        type: string
+        description: "Custom path for storing settings (leave empty for default)"
+        default: ""
+      debug:
+        type: boolean
+        description: "Enable debug logging"
+        default: false
+    required: []
+  commandFunction: |-
+    (config) => ({ 
+      command: 'node', 
+      args: ['dist/index.js'], 
+      env: { 
+        ENV_ENCRYPTION_KEY: config.encryptionKey || '',
+        SMITHERY_PROFILE_PATH: config.storagePath || '',
+        DEBUG: config.debug ? 'true' : 'false'
+      } 
+    })
+exampleConfig:
+  encryptionKey: ""
+  storagePath: ""
+  debug: false
+description: "🔐 Environment Settings MCP - Secure storage and management of environment variables and secrets via Smithery.ai hosting"
+tags:
+  - "environment"
+  - "settings"
+  - "secrets"
+  - "config"
+  - "security"
