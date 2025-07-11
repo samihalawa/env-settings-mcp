@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Simple environment variable and settings management MCP server with Smithery.ai hosting support",
   "main": "dist/index.js",
+  "module": "./src/index.ts",
   "type": "module",
   "scripts": {
     "build": "tsc",
